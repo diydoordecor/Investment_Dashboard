@@ -26,21 +26,37 @@ def display_chart(ticker):
         stock_data = yf.Ticker(ticker).history(period="5y")
         stock_data["50_SMA"] = stock_data["Close"].rolling(window=50).mean()
         stock_data["200_SMA"] = stock_data["Close"].rolling(window=200).mean()
-        
+
         st.title(f"{ticker} - Stock Analysis")
-        st.subheader("Historical Price with Moving Averages")
+        st.subheader("Historical Price with Moving Averages and Bands")
+
+        # Calculate historical bands
+        stock_data['Upper_Band'] = stock_data['Close'].rolling(window=200).mean() + 2 * stock_data['Close'].rolling(window=200).std()
+        stock_data['Lower_Band'] = stock_data['Close'].rolling(window=200).mean() - 2 * stock_data['Close'].rolling(window=200).std()
 
         fig, ax = plt.subplots(figsize=(10, 5))
         stock_data["Close"].plot(label="Close Price", ax=ax)
         stock_data["50_SMA"].plot(label="50-day SMA", ax=ax)
         stock_data["200_SMA"].plot(label="200-day SMA", ax=ax)
+        stock_data['Upper_Band'].plot(label="Upper Band", linestyle='--', ax=ax, alpha=0.7)
+        stock_data['Lower_Band'].plot(label="Lower Band", linestyle='--', ax=ax, alpha=0.7)
 
         # Linear regression trendline
-        reg = LinearRegression()
         stock_data["Days"] = np.arange(len(stock_data))
+        reg = LinearRegression()
         reg.fit(stock_data["Days"].values.reshape(-1, 1), stock_data["Close"].fillna(0))
         trendline = reg.predict(stock_data["Days"].values.reshape(-1, 1))
         ax.plot(stock_data.index, trendline, label="Trendline", linestyle="--")
+
+        # Adding gridlines and legend
+        ax.grid(True, linestyle='--', alpha=0.7)
+        ax.legend()
+
+        # Display regression equation and commentary
+        slope = reg.coef_[0]
+        intercept = reg.intercept_
+        st.write(f"**Trendline Equation:** y = {slope:.2f}x + {intercept:.2f}")
+        st.write("The trendline represents the linear regression of the stock's closing prices over time. The slope indicates the average daily change in price, and the intercept represents the estimated price at day zero.")
 
         # Display CAGR
         cagr = calculate_cagr(
@@ -51,6 +67,22 @@ def display_chart(ticker):
 
         st.pyplot(fig)
         st.write(f"**CAGR:** {cagr:.2%}")
+
+        # Display Revenue and Net Income
+        st.subheader("Revenue and Net Income")
+        ticker_obj = yf.Ticker(ticker)
+        financials = ticker_obj.financials
+        try:
+            revenue = financials.loc["Total Revenue"]
+            net_income = financials.loc["Net Income"]
+            fig, ax = plt.subplots(figsize=(10, 5))
+            revenue.plot(kind="bar", ax=ax, color="blue", alpha=0.7, label="Revenue")
+            net_income.plot(kind="bar", ax=ax, color="green", alpha=0.7, label="Net Income")
+            ax.set_title("Revenue and Net Income")
+            ax.legend()
+            st.pyplot(fig)
+        except Exception as e:
+            st.write("Unable to retrieve revenue and net income data.")
 
     except Exception as e:
         st.error(f"Unable to fetch data for {ticker}. Error: {e}")
